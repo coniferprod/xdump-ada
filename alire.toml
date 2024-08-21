@@ -1,0 +1,12 @@
+name = "xdump"
+description = "Hex dump in Ada 2012"
+version = "0.1.0-dev"
+
+authors = ["Jere Käpyaho"]
+maintainers = ["Jere Käpyaho <2261936+jerekapyaho@users.noreply.github.com>"]
+maintainers-logins = ["jerekapyaho"]
+licenses = "MIT"
+website = ""
+tags = []
+
+executables = ["xdump"]
