@@ -40,6 +40,18 @@ procedure Xdump is
       Gap : Boolean := True; --  leave a gap between halves of dump line
    end record;
 
+   function Dump_Line_Length (Max_Offset : Integer; Configuration : Dump_Configuration) return Integer is
+      Max : constant Integer := Max_Offset - 1;
+   begin
+      return
+         Max'Image'Length
+         + 2  --  for ": "
+         + Configuration.Bytes_Per_Line * 3  --  for "xx "
+         + (if Configuration.Gap then 1 else 0)
+         + 2  -- between last byte and ASCII characters
+         + Configuration.Bytes_Per_Line;
+   end Dump_Line_Length;
+
    --  Pad a string representation of an integer from the
    --  left with zeros.
    procedure Zero_Pad (S : String; Result : out String) is
@@ -78,8 +90,33 @@ procedure Xdump is
    Config : Dump_Configuration;
    Size : Ada.Directories.File_Size;
    Name : Ada.Strings.Unbounded.Unbounded_String;
+
+   Debugging : constant Boolean := True;
+   Max_Size : constant Ada.Directories.File_Size := 1_000_000;
+
+   function Make_Dump_Line (Data : Byte_Array; Start_Offset : Natural; Configuration : Dump_Configuration) return String is
+      type Dump_Line_Type is new String (1..Dump_Line_Length (Integer (Max_Size), Configuration));
+      Line : Dump_Line_Type;
+      Line_Offset : Positive := 1;
+      Max_Offset : constant Integer := Integer (Max_Size) - 1;
+      Max_Offset_Length : constant Integer := Max_Offset'Image'Length;
+      Start_String : String (1..Max_Offset_Length);
+      Offset_String : String (1..Max_Offset_Length);
+      Byte_Start : Positive := Max_Offset_Length + 2;
+   begin
+      Ada.Integer_Text_IO.Put (To => Start_String, Item => Start_Offset);
+      Zero_Pad (Start_String, Offset_String);
+      Line (Line_Offset .. Line_Offset + Max + 2) := Offset_String & ": ";
+      Line_Offset := Line_Offset + Max;
+
+      return Line;
+   end Make_Dump_Line;
+
 begin
-   --Ada.Text_IO.Put_Line ("Max File_Size is " & Ada.Directories.File_Size'Last'Image);
+   if Debugging then
+      Ada.Text_IO.Put_Line ("Max File_Size is " & Ada.Directories.File_Size'Last'Image);
+      Ada.Text_IO.Put_Line ("Dump line length = " & Dump_Line_Length (Integer (Max_Size), Config)'Image);
+   end if;
 
    if Ada.Command_Line.Argument_Count = 0 then
       Ada.Text_IO.Put_Line ("No input file");
