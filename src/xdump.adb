@@ -1,5 +1,4 @@
 with Ada.Text_IO;
-with Ada.Direct_IO;
 with Ada.Integer_Text_IO;
 with Ada.Characters.Handling;
 with Ada.Command_Line;
@@ -7,13 +6,13 @@ with Ada.Directories; use Ada.Directories;
 with Ada.Strings.Maps;
 with Ada.Strings.Unbounded;
 with Ada.Streams.Stream_IO;
-with Interfaces;
+with Ada.Sequential_IO;
 
 procedure Xdump is
-   type Byte is new Interfaces.Unsigned_8;
+   type Byte is mod 256;
    type Byte_Array is array (Ada.Directories.File_Size range <>) of Byte;
    subtype Hex_Byte_String is String (1 .. 2);
-   package Byte_IO is new Ada.Direct_IO (Byte);
+   package Byte_IO is new Ada.Sequential_IO (Byte);
 
    --  Hex characters using Ada.Strings.Maps facilities.
    --  Use lower case; clients can convert to upper
@@ -67,7 +66,7 @@ procedure Xdump is
    end Zero_Pad;
 
    --  Read all the bytes in the file.
-   procedure Read_File (Name : String; Contents : out Byte_Array) is
+   procedure Read_File_Stream (Name : String; Contents : out Byte_Array) is
       package SIO renames Ada.Streams.Stream_IO;
 
       Input_File   : SIO.File_Type;
@@ -85,7 +84,26 @@ procedure Xdump is
       end loop;
 
       SIO.Close (Input_File);
-   end Read_File;
+   end Read_File_Stream;
+
+   procedure Read_All_Bytes (File_Name : String; Result : out Byte_Array) is
+      use Byte_IO;
+
+      Input_File : File_Type;
+      Index : Ada.Directories.File_Size;
+      B : Byte;
+   begin
+      Open (Input_File, In_File, File_Name);
+
+      Index := Result'First;
+      while not End_Of_File (Input_File) loop
+         Read (Input_File, B);
+         Result (Index) := B;
+         Index := Index + 1;
+      end loop;
+
+      Close (Input_File);
+   end Read_All_Bytes;
 
    Config : Dump_Configuration;
    Size : Ada.Directories.File_Size;
@@ -94,23 +112,23 @@ procedure Xdump is
    Debugging : constant Boolean := True;
    Max_Size : constant Ada.Directories.File_Size := 1_000_000;
 
-   function Make_Dump_Line (Data : Byte_Array; Start_Offset : Natural; Configuration : Dump_Configuration) return String is
-      type Dump_Line_Type is new String (1..Dump_Line_Length (Integer (Max_Size), Configuration));
-      Line : Dump_Line_Type;
-      Line_Offset : Positive := 1;
-      Max_Offset : constant Integer := Integer (Max_Size) - 1;
-      Max_Offset_Length : constant Integer := Max_Offset'Image'Length;
-      Start_String : String (1..Max_Offset_Length);
-      Offset_String : String (1..Max_Offset_Length);
-      Byte_Start : Positive := Max_Offset_Length + 2;
-   begin
-      Ada.Integer_Text_IO.Put (To => Start_String, Item => Start_Offset);
-      Zero_Pad (Start_String, Offset_String);
-      Line (Line_Offset .. Line_Offset + Max + 2) := Offset_String & ": ";
-      Line_Offset := Line_Offset + Max;
+   --  function Make_Dump_Line (Data : Byte_Array; Start_Offset : Natural; Configuration : Dump_Configuration) return String is
+   --     type Dump_Line_Type is new String (1..Dump_Line_Length (Integer (Max_Size), Configuration));
+   --     Line : Dump_Line_Type;
+   --     Line_Offset : Positive := 1;
+   --     Max_Offset : constant Integer := Integer (Max_Size) - 1;
+   --     Max_Offset_Length : constant Integer := Max_Offset'Image'Length;
+   --     Start_String : String (1..Max_Offset_Length);
+   --     Offset_String : String (1..Max_Offset_Length);
+   --     Byte_Start : Positive := Max_Offset_Length + 2;
+   --  begin
+   --     Ada.Integer_Text_IO.Put (To => Start_String, Item => Start_Offset);
+   --     Zero_Pad (Start_String, Offset_String);
+   --     Line (Line_Offset .. Line_Offset + Max_Offset + 2) := Offset_String & ": ";
+   --     Line_Offset := Line_Offset + Max_Offset;
 
-      return Line;
-   end Make_Dump_Line;
+   --     return Line;
+   --  end Make_Dump_Line;
 
 begin
    if Debugging then
@@ -125,7 +143,7 @@ begin
 
    Name := Ada.Strings.Unbounded.To_Unbounded_String (Ada.Command_Line.Argument (1));
    declare
-      File_Name : String := Ada.Strings.Unbounded.To_String (Name);
+      File_Name : constant String := Ada.Strings.Unbounded.To_String (Name);
    begin
       if not Ada.Directories.Exists (File_Name) then
          Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error, "File not found");
@@ -141,7 +159,7 @@ begin
    begin
       Config.Char_Case := Lower_Case;
 
-      Read_File (Ada.Strings.Unbounded.To_String (Name), Contents => Data);
+      Read_All_Bytes (Ada.Strings.Unbounded.To_String (Name), Result => Data);
 
       declare
          Counter : Integer;
