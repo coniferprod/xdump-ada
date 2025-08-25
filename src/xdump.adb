@@ -10,9 +10,15 @@ with Ada.Sequential_IO;
 
 procedure Xdump is
    type Byte is mod 256;
+   for Byte'Size use 8;
+   subtype Byte_Range is Integer range 0 .. 7;
+   type Bits_Type is array (Byte_Range) of Boolean;
+   pragma Pack (Bits_Type);
+
    type Byte_Array is array (Ada.Directories.File_Size range <>) of Byte;
-   subtype Hex_Byte_String is String (1 .. 2);
    package Byte_IO is new Ada.Sequential_IO (Byte);
+
+   subtype Hex_Byte_String is String (1 .. 2);
 
    --  Hex characters using Ada.Strings.Maps facilities.
    --  Use lower case; clients can convert to upper
@@ -130,6 +136,42 @@ procedure Xdump is
    --     return Line;
    --  end Make_Dump_Line;
 
+   function To_Bits (B : Byte) return Bits_Type is
+      Result : Bits_Type := (others => False);
+   begin
+      for N in reverse Byte_Range loop
+         Result (N) := (if (B and 2**N) /= 0 then True else False);
+      end loop;
+      return Result;
+   end To_Bits;
+
+   function From_Bits (Bits : Bits_Type) return Byte is
+      Result : Byte := 16#00#;
+      Multiplier : Byte;
+   begin
+      for N in Byte_Range loop
+         Multiplier := (if Bits (N) then 1 else 0);
+         Result := Result + Multiplier * 2**N;
+      end loop;
+      return Result;
+   end From_Bits;
+
+   procedure Show_Bits (Bits : Bits_Type) is
+   begin
+      for N in reverse Byte_Range loop
+         Ada.Text_IO.Put ((if Bits (N) then '1' else '0'));
+      end loop;
+   end Show_Bits;
+
+   function Shift_Right (B : Byte; Count : Byte_Range := 1) return Byte is
+      B_Bits : Bits_Type := To_Bits (B);
+      Result : Byte;
+   begin
+      B_Bits (Byte_Range'First .. Byte_Range'Last - Count)
+         := B_Bits (Byte_Range'First + Count .. Byte_Range'Last);
+      return From_Bits (B_Bits);
+   end Shift_Right;
+
 begin
    if Debugging then
       Ada.Text_IO.Put_Line ("Max File_Size is " & Ada.Directories.File_Size'Last'Image);
@@ -222,4 +264,19 @@ begin
       when Name_Error =>
          Ada.Text_IO.Put_Line (Ada.Text_IO.Standard_Error, "File not found");
    end;
+
+   for B in Byte'First .. Byte'Last loop
+      Ada.Text_IO.Put (To_Hex (B) & " = ");
+      Show_Bits (To_Bits (B));
+      Ada.Text_IO.Put (" = " & To_Hex (From_Bits (To_Bits (B))));
+      Ada.Text_IO.New_Line;
+   end loop;
+
+   Show_Bits (To_Bits (16#6D#));
+   Ada.Text_io.New_Line;
+   for N in 1 .. 7 loop
+      Show_Bits (To_Bits (Shift_Right (16#6D#, N)));
+      Ada.Text_IO.New_Line;
+   end loop;
+
 end Xdump;
